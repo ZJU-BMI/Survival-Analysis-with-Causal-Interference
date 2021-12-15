@@ -12,7 +12,7 @@ _EPSILON = 1e-8
 
 data_mode = 'EICU'
 
-result_path = data_mode + '/result10'
+result_path = data_mode + '/result'
 if not os.path.exists(result_path):
     os.makedirs(result_path)
 
@@ -48,11 +48,8 @@ def fit(tr_cov, tr_times, tr_labels, tr_diags,
             out = tf.stack(pred_beta_x, axis=1)
             out = tf.transpose(out, [0, 2, 1])
 
-            # calculated \sum_d <X, \Beta_d> P(D = d)
+            # calculated \sum_r <X, \Beta_r> P(R = r)
             tr_diags_tensor = tf.reshape(tf.tile(tr_diags, [1, num_events]), [-1, num_events, num_events])
-            # out = tf.reduce_sum(tf.multiply(out, tr_diags_tensor), axis=2)
-            # event_weights = tf.cast(tf.reduce_sum(tr_diags_tensor, axis=2), tf.float32)
-            # out = tf.divide(out, event_weights)
             out = tf.multiply(out, tr_diags_tensor)
             event_prob_tensor = tf.cast(event_prob, tf.float32)
             out = tf.reduce_sum(tf.multiply(out, event_prob_tensor), axis=2)
@@ -104,9 +101,7 @@ def fit(tr_cov, tr_times, tr_labels, tr_diags,
 
         # calculated \sum_d <X, \Beta_d> P(D = d)
         te_diags_tensor = tf.reshape(tf.tile(te_diags, [1, num_events]), [-1, num_events, num_events])
-        # te_out = tf.reduce_sum(tf.multiply(te_out, te_diags_tensor), axis=2)
-        # event_weights = tf.cast(tf.reduce_sum(te_diags_tensor, axis=2), tf.float32)
-        # te_out = tf.divide(te_out, event_weights)
+
         te_out = tf.multiply(te_out, te_diags_tensor)
         event_prob_tensor = tf.cast(event_prob, tf.float32)
         te_out = tf.reduce_sum(tf.multiply(te_out, event_prob_tensor), axis=2)
@@ -124,7 +119,6 @@ def fit(tr_cov, tr_times, tr_labels, tr_diags,
         print('iter #{}, Loss = {:.4f}, c-index = '.format(epoch_complete + 1, whole_loss), c_index_results)
 
         if np.sum(c_index_results) > np.sum(results_final):
-            update_pred_result(te_out, te_times, te_labels, num_events, eval_time, n_fold)
             results_final = c_index_results
             print('Update c-index result, current best: ', results_final)
 
@@ -135,39 +129,3 @@ def fit(tr_cov, tr_times, tr_labels, tr_diags,
     return results_final
 
 
-def update_pred_result(te_out, te_times, te_labels, num_events, eval_time, itr):
-    true_label = pd.DataFrame({
-        'time': te_times,
-        'label': np.cast['int32'](te_labels)
-    })
-    true_label.to_csv(result_path + '/true_label{}.csv'.format(itr), index=False)
-
-    N = len(te_out)
-    n_times = int(np.max(te_times)) + 1
-    pred_risk = pd.DataFrame({
-        'time': np.arange(n_times)
-    })
-    risk_evs = np.zeros([N, num_events, n_times])
-    for ev in range(num_events):
-        risk_score = np.exp(te_out[:, ev])   # shape = [N,]
-        cumus = cumulative_hazard_function(risk_score, te_times, te_labels, ev + 1)  # shape = [n_times, ]
-        risk_ev = np.matmul(np.reshape(risk_score, [N, 1]), np.reshape(cumus, [1, n_times]))
-        risk_evs[:, ev, :] = risk_ev
-
-    for i in range(N):
-        risk_evs[i, :, :] = risk_evs[i, :, :] / (np.sum(risk_evs[i, :, -1]) + _EPSILON)
-
-    for ev in range(num_events):
-        risk_ev = np.mean(risk_evs[:, ev, :], axis=0)
-        pred_risk['pred_{}'.format(ev + 1)] = risk_ev
-
-    pred_risk.to_csv(result_path + '/pred_risk_causal{}.csv'.format(itr), index=False)
-
-    # for i in range(num_events):
-    #     risk_scores = np.exp(te_out[:, i])
-    #     cumu_scores = cumulative_hazard_function(risk_scores, te_times, te_labels, i + 1)
-    #     risk_scores *= cumu_scores[eval_time]
-    #     true_label = np.cast['float32'](np.equal(te_labels, i + 1))
-    #     pred_label = calculate_score(true_label, risk_scores, True)
-    #     pred_risk['pred_label{}'.format(i + 1)] = np.cast['int32'](pred_label)
-    # pred_risk.to_csv(result_path + '/pred_risk_causal{}.csv'.format(itr), index=False)

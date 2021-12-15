@@ -86,15 +86,15 @@ data_mode = 'MIMIC'
 # pred_time = [52, 3 * 52, 5 * 52]  # prediction time (in months)
 # eval_time = [12, 36, 60, 120]  # months evaluation time (for C-index and Brier-Score)
 
-pred_time = [5, 15, 25]  # prediction time (in months)
-eval_time = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # evaluation time (for C-index and Brier-Score)
+pred_time = [5, 15, 25]  # prediction time (in days)
+eval_time = [3, 5, 7, 10]  # evaluation time (for C-index and Brier-Score)
 
 _, num_Event, num_Category = np.shape(mask1)  # dim of mask3: [subj, Num_Event, Num_Category]
 max_length = np.shape(data)[1]
 
 file_path = '{}'.format(data_mode)
 
-result_path = 'result3'
+result_path = 'result'
 
 if not os.path.exists(file_path):
     os.makedirs(file_path)
@@ -111,7 +111,7 @@ boost_mode = 'ON'  # {'ON', 'OFF'}
 # HYPER-PARAMETERS
 new_parser = {'mb_size': 32,
 
-              'iteration_burn_in': 3000,
+              'iteration_burn_in': 1000,
               'iteration': 25000,
 
               'keep_prob': 0.6,
@@ -184,14 +184,6 @@ skf = StratifiedKFold(n_splits=5)
 # 3. Split Dataset into Train/Valid/Test Sets
 for train_index, test_index in skf.split(data, label):
 
-    # TRAINING-TESTING SPLIT
-    # (tr_data, te_data, tr_data_mi, te_data_mi,
-    #  tr_time, te_time, tr_label, te_label,
-    #  tr_diags, te_diags, tr_mask1, te_mask1,
-    #  tr_mask2, te_mask2, tr_mask3, te_mask3) = train_test_split(data, data_mi, time, label, diags,
-    #                                                             mask1, mask2, mask3, test_size=0.2,
-    #                                                             random_state=seed)
-
     tr_data, te_data = data[train_index], data[test_index]
     tr_data_mi, te_data_mi = data_mi[train_index], data_mi[test_index]
     tr_time, te_time = time[train_index], time[test_index]
@@ -210,8 +202,8 @@ for train_index, test_index in skf.split(data, label):
 
     if boost_mode == 'ON':
         tr_data, tr_data_mi, tr_time, tr_label, tr_diags, \
-            tr_mask1, tr_mask2, tr_mask3 = f_get_boosted_trainset(tr_data, tr_data_mi, tr_time, tr_label,
-                                                                  tr_diags, tr_mask1, tr_mask2, tr_mask3)
+        tr_mask1, tr_mask2, tr_mask3 = f_get_boosted_trainset(tr_data, tr_data_mi, tr_time, tr_label,
+                                                              tr_diags, tr_mask1, tr_mask2, tr_mask3)
 
     # 4. Train the Network
     # CREATE DYNAMIC-DEEPHIT NETWORK
@@ -232,11 +224,10 @@ for train_index, test_index in skf.split(data, label):
     if burn_in_mode == 'ON':
         print("BURN-IN TRAINING ...")
         for itr in range(iteration_burn_in):
-            x_mb, x_mi_mb, k_mb, t_mb, d_mb, m1_mb, m2_mb, m3_mb = f_get_minibatch(mb_size, tr_data, tr_data_mi,
-                                                                                   tr_label,
-                                                                                   tr_time, tr_diags, tr_mask1,
-                                                                                   tr_mask2,
-                                                                                   tr_mask3)
+            x_mb, x_mi_mb, k_mb, t_mb, \
+            d_mb, m1_mb, m2_mb, m3_mb = f_get_minibatch(mb_size, tr_data, tr_data_mi,
+                                                        tr_label, tr_time, tr_diags, tr_mask1,
+                                                        tr_mask2, tr_mask3)
             DATA = (x_mb, k_mb, t_mb)
             MISSING = x_mi_mb
 
@@ -250,9 +241,10 @@ for train_index, test_index in skf.split(data, label):
     min_valid = 0.5
 
     for itr in range(iteration):
-        x_mb, x_mi_mb, k_mb, t_mb, d_mb, m1_mb, m2_mb, m3_mb = f_get_minibatch(mb_size, tr_data, tr_data_mi, tr_label,
-                                                                               tr_time, tr_diags, tr_mask1, tr_mask2,
-                                                                               tr_mask3)
+        x_mb, x_mi_mb, k_mb, t_mb, \
+        d_mb, m1_mb, m2_mb, m3_mb = f_get_minibatch(mb_size, tr_data, tr_data_mi, tr_label,
+                                                    tr_time, tr_diags, tr_mask1, tr_mask2,
+                                                    tr_mask3)
         DATA = (x_mb, k_mb, t_mb, d_mb)
         MASK = (m1_mb, m2_mb, m3_mb)
         MISSING = x_mi_mb
@@ -266,7 +258,6 @@ for train_index, test_index in skf.split(data, label):
         # VALIDATION  (based on average C-index of our interest)
         if (itr + 1) % 1000 == 0:
             risk_all = f_get_risk_predictions(sess, model, va_data, va_data_mi, va_diags, pred_time, eval_time)
-
             for p, p_time in enumerate(pred_time):
                 pred_horizon = int(p_time)
                 val_result1 = np.zeros([num_Event, len(eval_time)])
@@ -292,26 +283,9 @@ for train_index, test_index in skf.split(data, label):
                 print('updated.... average c-index = ' + str('%.4f' % (tmp_valid)))
 
     # 5. Test the Trained Network
-
     saver.restore(sess, file_path + '/model')
 
     risk_all = f_get_risk_predictions(sess, model, te_data, te_data_mi, te_diags, pred_time, eval_time)
-
-    true_label = pd.DataFrame({
-        'time': te_time[:, 0],
-        'label': np.cast['int32'](te_label[:, 0])
-    })
-    true_label.to_csv(result_path + '/true_label{}.csv'.format(n_fold), index=False)
-    risk_evs = f_get_risk_predictions(sess, model, te_data, te_data_mi, te_diags, pred_time=[0],
-                                      eval_time=np.arange(num_Category))
-    pred_res = pd.DataFrame({
-        'time': np.arange(num_Category)
-    })
-
-    for ev in range(num_Event):
-        risk_ev = np.mean(risk_evs[ev][:, 0, :], axis=0).reshape([num_Category])
-        pred_res['pred_{}'.format(ev + 1)] = risk_ev
-    pred_res.to_csv(result_path + '/pred_risk_causal{}.csv'.format(n_fold), index=False)
 
     for p, p_time in enumerate(pred_time):
         pred_horizon = int(p_time)
@@ -319,27 +293,11 @@ for train_index, test_index in skf.split(data, label):
 
         for t, t_time in enumerate(eval_time):
             eval_horizon = int(t_time) + pred_horizon
-
-            # if p == len(pred_time) - 1 and t == len(eval_time) - 1:
-            #     risk_pred = pd.DataFrame({
-            #         'time': te_time[:, 0],
-            #         'label': np.cast['int32'](te_label[:, 0])
-            #     })
-            #     for k in range(num_Event):
-            #         risk_score = risk_all[k][:, p, t]
-            #         (y_pred_label, threshold, auc, precision, recall, f_score, accuracy) = calculate_score(
-            #             (te_label[:, 0] == k + 1).astype(int), risk_score, True)
-            #         pred_label = np.cast['int32'](y_pred_label)
-            #         risk_pred['score{}'.format(k + 1)] = risk_score
-            #         risk_pred['pred_label{}'.format(k + 1)] = pred_label
-            #     risk_pred.to_csv(result_path + '/pred_result_{}.csv'.format(n_fold), index=False)
-
             for k in range(num_Event):
                 result1[k, t] = c_index(risk_all[k][:, p, t], te_time, (te_label[:, 0] == k + 1).astype(int),
                                         eval_horizon)  # -1 for no event (not comparable)
                 result2[k, t] = brier_score(risk_all[k][:, p, t], te_time, (te_label[:, 0] == k + 1).astype(int),
                                             eval_horizon)  # -1 for no event (not comparable)
-
         if p == 0:
             final1, final2 = result1, result2
         else:
@@ -372,4 +330,3 @@ for train_index, test_index in skf.split(data, label):
     print('========================================================')
     df2.to_csv(result_path + '/brier_score_casual_{}.csv'.format(n_fold))
     n_fold += 1
-

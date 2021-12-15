@@ -215,31 +215,31 @@ class Model_Longitudinal_Attention:
             # (num_layers_CS-1) layers for cause-specific (num_Event subNets)
             out = []
 
-            # calculate P(Y|do(X)) = \sum_d (p_(k,t)^d * p(D = d)),
-            # D are the events diagnosed on each subject and labeled in self.d
-            for _ in range(self.num_Event * self.num_Event):
-                cs_out = utils.create_FCNet(h, self.num_layers_CS, self.h_dim2, self.FC_active_fn, self.h_dim2,
-                                            self.FC_active_fn, self.initial_W, self.reg_W, self.keep_prob)
+            # calculate P(Y|do(X)) = \sum_d (p_(k,t)^r * p(R = r)),
+            # R are the competing risks on each subject and labeled in self.d
+            for _ in range(self.num_Event):
+                cs_out = utils.create_FCNet(h, self.num_layers_CS, self.h_dim2, self.FC_active_fn,
+                                            self.num_Event * self.h_dim2, self.FC_active_fn,
+                                            self.initial_W, self.reg_W, self.keep_prob)
+                cs_out = tf.nn.dropout(cs_out, keep_prob=self.keep_prob)
+                cs_out = FC_Net(cs_out, self.num_Event * self.num_Category, activation_fn=tf.nn.softmax,
+                                weights_initializer=self.initial_W, weights_regularizer=self.reg_W_out)
+                cs_out = tf.reshape(cs_out, shape=[-1, self.num_Event, self.num_Category])
                 out.append(cs_out)
 
             out = tf.stack(out, axis=1)
-            out = tf.reshape(out, [-1, self.num_Event * self.num_Event * self.h_dim2])
-            out = tf.nn.dropout(out, keep_prob=self.keep_prob)
-
-            out = FC_Net(out, self.num_Event * self.num_Event * self.num_Category, activation_fn=tf.nn.softmax,
-                         weights_initializer=self.initial_W, weights_regularizer=self.reg_W_out, scope="Output")
-
+            out = tf.transpose(out, [0, 2, 1, 3])
             # calculate \sum_d p_(k,t)^d * p(D = d), e.g.,P(K,T|do(X))
             out = tf.reshape(out, [-1, self.num_Event, self.num_Event, self.num_Category])
-            # diagnosis label, specify to every subject
-            diags = tf.reshape(tf.tile(tf.reshape(self.d, [-1, 1]), [1, self.num_Category]),
+            # risk label, specify to every subject
+            # P(R = r) normalize to 1
+            diag = self.d * self.event_prob
+            diag = diag / (tf.reshape(tf.reduce_sum(diag, axis=1), [-1, 1]) + _EPSILON)
+            diags = tf.reshape(tf.tile(tf.reshape(diag, [-1, 1]), [1, self.num_Category]),
                                [-1, self.num_Event, self.num_Category])
             diags = tf.reshape(tf.tile(diags, [1, self.num_Event, 1]),
                                [-1, self.num_Event, self.num_Event, self.num_Category])
-            out = tf.multiply(out, diags)
-            # P(D = d)
-            event_prod = tf.constant(self.event_prob, shape=(self.num_Event, 1), dtype=tf.float32)
-            out = tf.reduce_sum(tf.multiply(out, event_prod), axis=2)
+            out = tf.reduce_sum(tf.multiply(out, diags), axis=2)
             self.out = out
 
             # GET LOSS FUNCTIONS

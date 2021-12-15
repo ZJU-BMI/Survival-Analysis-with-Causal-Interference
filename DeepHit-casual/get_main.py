@@ -1,23 +1,3 @@
-"""
-This train DeepHit, and outputs the validation performance for random search.
-
-INPUTS:
-    - DATA = (data, time, label)
-    - MASK = (mask1, mask2)
-    - in_parser: dictionary of hyperparameters
-    - out_itr: the training/testing split indicator
-    - eval_time: None or a list (e.g. [12, 24, 36]) at which the validation of the network is performed
-    - MAX_VALUE: maximum validation value
-    - OUT_ITERATION: total number of training/testing splits
-    - seed: random seed for training/testing/validation
-
-OUTPUTS:
-    - the validation performance of the trained network
-    - save the trained network in the folder directed by "in_parser['out_path'] + '/itr_' + str(out_itr)"
-"""
-
-_EPSILON = 1e-08
-
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -31,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from class_DeepHit import Model_DeepHit
 from utils_eval import c_index, brier_score, weighted_c_index, weighted_brier_score
 
+_EPSILON = 1e-08
 
 # USER-DEFINED FUNCTIONS
 def log(x):

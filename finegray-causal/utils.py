@@ -12,7 +12,6 @@ def get_km_scores(times, labels, fail_code):
     :param fail_code: event_id
     :return:
     """
-
     N = len(times)
     # Sorting T and E in ascending order by T
     order = np.argsort(times)
@@ -105,7 +104,6 @@ def baseline_hazard_function(beta_x, times, labels, fail_code):
 
 
 def cumulative_hazard_function(risk_score, times, labels, fail_code):
-
     N = len(risk_score)
     # sort by event time in descending order
     order = np.argsort(-times)
@@ -150,30 +148,3 @@ def cumulative_hazard_function(risk_score, times, labels, fail_code):
     cumulative_hazard = np.cumsum(cumulative_hazard)
 
     return cumulative_hazard
-
-
-def calculate_score(y_label, y_prediction, print_flag=False):
-    """
-    :param y_label: true label
-    :param y_prediction: prediction of model
-    :param print_flag: print pr not
-    :return: auc, precision, recall, f_score, accuracy
-    """
-    try:
-        auc = roc_auc_score(y_label, y_prediction)
-        fpr, tpr, thresholds = roc_curve(y_label, y_prediction)
-        threshold = thresholds[np.argmax(tpr - fpr)]
-        print(threshold)
-        y_pred_label = (y_prediction >= threshold)
-        precision = precision_score(y_label, y_pred_label)
-        recall = recall_score(y_label, y_pred_label)
-        f_score = f1_score(y_label, y_pred_label)
-        accuracy = accuracy_score(y_label, y_pred_label)
-        if print_flag:
-            print('auc:{} precision:{} recall:{} f_score:{} accuracy:{}'.format(auc, precision, recall, f_score,
-                                                                                accuracy))
-    except Exception as e:
-        print(str(e))
-        return 0
-    # return y_pred_label, auc, precision, recall, f_score, accuracy
-    return y_pred_label

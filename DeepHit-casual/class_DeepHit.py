@@ -1,24 +1,3 @@
-"""
-This declare DeepHit architecture:
-
-INPUTS:
-    - input_dims: dictionary of dimension information
-        > x_dim: dimension of features
-        > num_Event: number of competing events (this does not include censoring label)
-        > num_Category: dimension of time horizon of interest, i.e., |T| where T = {0, 1, ..., T_max-1}
-                      : this is equivalent to the output dimension
-    - network_settings:
-        > h_dim_shared & num_layers_shared: number of nodes and number of fully-connected layers for the shared subnetwork
-        > h_dim_CS & num_layers_CS: number of nodes and number of fully-connected layers for the cause-specific subnetworks
-        > active_fn: 'relu', 'elu', 'tanh'
-        > initial_W: Xavier initialization is used as a baseline
-
-LOSS FUNCTIONS:
-    - 1. loglikelihood (this includes log-likelihood of subjects who are censored)
-    - 2. rankding loss (this is calculated only for acceptable pairs; see the paper for the definition)
-    - 3. calibration loss (this is to reduce the calibration loss; this is not included in the paper version)
-"""
-
 import numpy as np
 import tensorflow as tf
 import random
@@ -95,32 +74,34 @@ class Model_DeepHit:
 
             # (num_layers_CS) layers for cause-specific (num_Event subNets)
             out = []
-            for _ in range(self.num_Event * self.num_Event):
-                cs_out = utils.create_FCNet(h, self.num_layers_CS, self.h_dim_CS, self.active_fn, self.h_dim_CS,
-                                            self.active_fn, self.initial_W, self.keep_prob, self.reg_W)
+            for _ in range(self.num_Event):
+                cs_out = utils.create_FCNet(h, self.num_layers_CS, self.h_dim_CS, self.active_fn,
+                                            self.h_dim_CS * self.num_Event, self.active_fn,
+                                            self.initial_W, self.keep_prob, self.reg_W)
+                cs_out = tf.nn.dropout(cs_out, keep_prob=self.keep_prob)
+                # softmax output layer
+                cs_out = FC_Net(cs_out, self.num_Event * self.num_Category, activation_fn=tf.nn.softmax,
+                                weights_initializer=self.initial_W, weights_regularizer=self.reg_W_out)
+                cs_out = tf.reshape(cs_out, shape=[-1, self.num_Event, self.num_Category])
                 out.append(cs_out)
 
             # stack referenced on subject
             out = tf.stack(out, axis=1)
-            out = tf.reshape(out, [-1, self.num_Event * self.num_Event * self.h_dim_CS])
-            out = tf.nn.dropout(out, keep_prob=self.keep_prob)
-            # softmax output layer
-            out = FC_Net(out, self.num_Event * self.num_Event * self.num_Category, activation_fn=tf.nn.softmax,
-                         weights_initializer=self.initial_W, weights_regularizer=self.reg_W_out, scope="Output")
+            out = tf.transpose(out, [0, 2, 1, 3])
 
             # calculate \sum_d p_(k,t)^d * p(D = d), e.g.,P(K,T|do(X))
             out = tf.reshape(out, [-1, self.num_Event, self.num_Event, self.num_Category])
+            # P(R = r) normalize to 1
+            diag = self.d * self.event_prob
+            diag = diag / (tf.reshape(tf.reduce_sum(diag, axis=1), [-1, 1]) + _EPSILON)
             # diagnosis label, specify to every subject
             # expand to the same dim size as the out shape: [num_subject, num_event, num_event, num_category]
-            diags = tf.reshape(tf.tile(tf.reshape(self.d, [-1, 1]), [1, self.num_Category]),
+            diags = tf.reshape(tf.tile(tf.reshape(diag, [-1, 1]), [1, self.num_Category]),
                                [-1, self.num_Event, self.num_Category])
             diags = tf.reshape(tf.tile(diags, [1, self.num_Event, 1]),
                                [-1, self.num_Event, self.num_Event, self.num_Category])
-            out = tf.multiply(out, diags)
-            # event_prob defines P(D = d)
-            event_prob = tf.constant(self.event_prob, shape=(self.num_Event, 1), dtype=tf.float32)
             # final out: P(Y, t|do(X))
-            out = tf.reduce_sum(tf.multiply(out, event_prob), axis=2)
+            out = tf.reduce_sum(tf.multiply(out, diags), axis=2)
             self.out = out
 
             # GET LOSS FUNCTIONS

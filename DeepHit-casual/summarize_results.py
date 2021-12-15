@@ -14,7 +14,7 @@ import import_data as impt
 import utils_network as utils
 
 from class_DeepHit import Model_DeepHit
-from utils_eval import c_index, brier_score, weighted_c_index, weighted_brier_score, calculate_score, load_logging
+from utils_eval import c_index, brier_score, weighted_c_index, weighted_brier_score, load_logging
 
 _EPSILON = 1e-08
 

@@ -8,59 +8,11 @@ import import_data_mimic as impt
 
 from class_DeepLongitudinal import Model_Longitudinal_Attention
 
-from utils_eval import c_index, brier_score, calculate_score
+from utils_eval import c_index, brier_score, _f_get_pred, f_get_risk_predictions
 from utils_log import save_logging, load_logging
 from utils_helper import f_get_minibatch, f_get_boosted_trainset
 
 _EPSILON = 1e-08
-
-
-def _f_get_pred(sess, model, data, data_mi, diags_, pred_horizon):
-    """
-        predictions based on the prediction time.
-        create new_data and new_mask2 that are available previous or equal to the prediction time
-        (no future measurements are used)
-    """
-    new_data = np.zeros(np.shape(data))
-    new_data_mi = np.zeros(np.shape(data_mi))
-
-    meas_time = np.concatenate([np.zeros([np.shape(data)[0], 1]), np.cumsum(data[:, :, 0], axis=1)[:, :-1]], axis=1)
-
-    for i in range(np.shape(data)[0]):
-        last_meas = np.sum(meas_time[i, :] <= pred_horizon)
-
-        new_data[i, :last_meas, :] = data[i, :last_meas, :]
-        new_data_mi[i, :last_meas, :] = data_mi[i, :last_meas, :]
-
-    return model.predict(new_data, new_data_mi, diags_)
-
-
-def f_get_risk_predictions(sess, model, data_, data_mi_, diags_, pred_time, eval_time):
-    pred = _f_get_pred(sess, model, data_[[0]], data_mi_[[0]], diags[[0]], 0)
-    _, num_Event, num_Category = np.shape(pred)
-
-    risk_all = {}
-    for k in range(num_Event):
-        risk_all[k] = np.zeros([np.shape(data_)[0], len(pred_time), len(eval_time)])
-
-    for p, p_time in enumerate(pred_time):
-        # PREDICTION
-        pred_horizon = int(p_time)
-        pred = _f_get_pred(sess, model, data_, data_mi_, diags_, pred_horizon)
-
-        for t, t_time in enumerate(eval_time):
-            eval_horizon = int(t_time) + pred_horizon  # if eval_horizon >= num_Category, output the maximum...
-
-            # calculate F(t | x, Y, t >= t_M) = \sum_{t_M <= \tau < t} P(\tau | x, Y, \tau > t_M)
-            risk = np.sum(pred[:, :, pred_horizon:(eval_horizon + 1)], axis=2)  # risk score until eval_time
-            risk = risk / (np.sum(np.sum(pred[:, :, pred_horizon:], axis=2), axis=1,
-                                  keepdims=True) + _EPSILON)  # conditioning on t > t_pred
-
-            for k in range(num_Event):
-                risk_all[k][:, p, t] = risk[:, k]
-
-    return risk_all
-
 
 # 1. Import Dataset
 # - Users must prepare dataset in csv format and modify 'import_data.py' following our exemplar 'PBC2'
@@ -79,8 +31,7 @@ data_mode = 'MIMIC'
 '''
 
 (x_dim, x_dim_cont, x_dim_bin), (data, time, label, diags), (mask1, mask2, mask3), (
-    data_mi) = impt.import_dataset_mimic(
-    norm_mode=None)
+    data_mi) = impt.import_dataset_mimic(norm_mode=None)
 
 # This must be changed depending on the datasets, prediction/evaliation times of interest
 # pred_time = [52, 3 * 52, 5 * 52]  # prediction time (in months)
@@ -109,34 +60,34 @@ burn_in_mode = 'ON'  # {'ON', 'OFF'}
 boost_mode = 'ON'  # {'ON', 'OFF'}
 
 # HYPER-PARAMETERS
-new_parser = {'mb_size': 32,
+new_parser = {
+    'mb_size': 32,
+    'iteration_burn_in': 3000,
+    'iteration': 25000,
 
-              'iteration_burn_in': 1000,
-              'iteration': 25000,
+    'keep_prob': 0.6,
+    'lr_train': 1e-4,
 
-              'keep_prob': 0.6,
-              'lr_train': 1e-4,
+    'h_dim_RNN': 100,
+    'h_dim_FC': 100,
+    'num_layers_RNN': 2,
+    'num_layers_ATT': 2,
+    'num_layers_CS': 2,
 
-              'h_dim_RNN': 100,
-              'h_dim_FC': 100,
-              'num_layers_RNN': 2,
-              'num_layers_ATT': 2,
-              'num_layers_CS': 2,
+    'RNN_type': 'LSTM',  # {'LSTM', 'GRU'}
 
-              'RNN_type': 'LSTM',  # {'LSTM', 'GRU'}
+    'FC_active_fn': tf.nn.relu,
+    'RNN_active_fn': tf.nn.tanh,
 
-              'FC_active_fn': tf.nn.relu,
-              'RNN_active_fn': tf.nn.tanh,
+    'event_prob': [0.29, 0.09, 0.89, 0.27, 0.82],
 
-              'event_prob': [0.29, 0.09, 0.89, 0.27, 0.82],
+    'reg_W': 1e-5,
+    'reg_W_out': 0.,
 
-              'reg_W': 1e-5,
-              'reg_W_out': 0.,
-
-              'alpha': 1.0,
-              'beta': 0.1,
-              'gamma': 1.0
-              }
+    'alpha': 1.0,
+    'beta': 0.1,
+    'gamma': 1.0
+}
 
 # INPUT DIMENSIONS
 input_dims = {'x_dim': x_dim,

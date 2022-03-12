@@ -1,22 +1,10 @@
-"""
-    Implemented: 02/12/2018
-      > For survival analysis evaluation
-
-    First implemented by Kartik Ahuja
-    Modified by CHANGHEE LEE
-
-    Modifcation List:
-        - 08/08/2018: Brier Score added
-"""
-
 import numpy as np
 from lifelines import KaplanMeierFitter
 
+_EPSILON = 1e-8
+
 
 # C(t)-INDEX CALCULATION
-from sklearn.metrics import roc_auc_score, roc_curve, precision_score, recall_score, f1_score, accuracy_score
-
-
 def c_index(Prediction, Time_survival, Death, Time):
     """
         This is a cause-specific c(t)-index
@@ -40,8 +28,8 @@ def c_index(Prediction, Time_survival, Death, Time):
         if Time_survival[i] <= Time and Death[i] == 1:
             N_t[i, :] = 1
 
-    Num = np.sum(((A) * N_t) * Q)
-    Den = np.sum((A) * N_t)
+    Num = np.sum((A * N_t) * Q)
+    Den = np.sum(A * N_t)
 
     if Num == 0 and Den == 0:
         result = -1  # not able to compute c-index!
@@ -104,7 +92,7 @@ def weighted_c_index(T_train, Y_train, Prediction, T_test, Y_test, Time):
         A[i, np.where(T_test[i] < T_test)] = 1. * W
         Q[i, np.where(Prediction[i] > Prediction)] = 1.  # give weights
 
-        if (T_test[i] <= Time and Y_test[i] == 1):
+        if T_test[i] <= Time and Y_test[i] == 1:
             N_t[i, :] = 1.
 
     Num = np.sum(((A) * N_t) * Q)
@@ -145,26 +133,74 @@ def weighted_brier_score(T_train, Y_train, Prediction, T_test, Y_test, Time):
     return np.mean(W * (Y_tilde - (1. - Prediction)) ** 2)
 
 
-def calculate_score(y_label, y_prediction, print_flag=False):
+def _f_get_pred(sess, model, data, data_mi, diags_, pred_horizon):
     """
-    :param y_label: true label
-    :param y_prediction: prediction of model
-    :param print_flag: print pr not
-    :return: auc, precision, recall, f_score, accuracy
+        predictions based on the prediction time.
+        create new_data and new_mask2 that are available previous or equal to the prediction time
+        (no future measurements are used)
     """
-    try:
-        auc = roc_auc_score(y_label, y_prediction)
-        fpr, tpr, thresholds = roc_curve(y_label, y_prediction)
-        threshold = thresholds[np.argmax(tpr - fpr)]
-        print(threshold)
-        y_pred_label = (y_prediction >= threshold)
-        precision = precision_score(y_label, y_pred_label)
-        recall = recall_score(y_label, y_pred_label)
-        f_score = f1_score(y_label, y_pred_label)
-        accuracy = accuracy_score(y_label, y_pred_label)
-        if print_flag:
-            print('auc:{} precision:{} recall:{} f_score:{} accuracy:{}'.format(auc, precision, recall, f_score,
-                                                                                accuracy))
-    except:
-        return 0, 0, 0, 0, 0
-    return y_pred_label, threshold, auc, precision, recall, f_score, accuracy
+    new_data = np.zeros(np.shape(data))
+    new_data_mi = np.zeros(np.shape(data_mi))
+
+    meas_time = np.concatenate([np.zeros([np.shape(data)[0], 1]), np.cumsum(data[:, :, 0], axis=1)[:, :-1]], axis=1)
+
+    for i in range(np.shape(data)[0]):
+        last_meas = np.sum(meas_time[i, :] <= pred_horizon)
+
+        new_data[i, :last_meas, :] = data[i, :last_meas, :]
+        new_data_mi[i, :last_meas, :] = data_mi[i, :last_meas, :]
+
+    return model.predict(new_data, new_data_mi, diags_)
+
+
+def f_get_risk_predictions(sess, model, data_, data_mi_, diags_, pred_time, eval_time):
+    pred = _f_get_pred(sess, model, data_[[0]], data_mi_[[0]], diags_[[0]], 0)
+    _, num_Event, num_Category = np.shape(pred)
+
+    risk_all = {}
+    for k in range(num_Event):
+        risk_all[k] = np.zeros([np.shape(data_)[0], len(pred_time), len(eval_time)])
+
+    for p, p_time in enumerate(pred_time):
+        # PREDICTION
+        pred_horizon = int(p_time)
+        pred = _f_get_pred(sess, model, data_, data_mi_, diags_, pred_horizon)
+
+        for t, t_time in enumerate(eval_time):
+            eval_horizon = int(t_time) + pred_horizon  # if eval_horizon >= num_Category, output the maximum...
+
+            # calculate F(t | x, Y, t >= t_M) = \sum_{t_M <= \tau < t} P(\tau | x, Y, \tau > t_M)
+            risk = np.sum(pred[:, :, pred_horizon:(eval_horizon + 1)], axis=2)  # risk score until eval_time
+            risk = risk / (np.sum(np.sum(pred[:, :, pred_horizon:], axis=2), axis=1,
+                                  keepdims=True) + _EPSILON)  # conditioning on t > t_pred
+
+            for k in range(num_Event):
+                risk_all[k][:, p, t] = risk[:, k]
+
+    return risk_all
+
+
+def f_get_risk_predictions2(sess, model, data_, data_mi_, diags_, pred_time=0, eval_time=None):
+
+    pred = _f_get_pred(sess, model, data_[[0]], data_mi_[[0]], diags_[[0]], 0)
+    _, num_Event, num_Category = np.shape(pred)
+    # PREDICTION
+    pred_horizon = int(pred_time)
+    pred = _f_get_pred(sess, model, data_, data_mi_, diags_, pred_horizon)
+
+    risk_all = np.zeros([np.shape(data_)[0], num_Event, len(eval_time)])
+    for t, t_time in enumerate(eval_time):
+        eval_horizon = int(t_time) + pred_horizon  # if eval_horizon >= num_Category, output the maximum...
+
+        # calculate F(t | x, Y, t >= t_M) = \sum_{t_M <= \tau < t} P(\tau | x, Y, \tau > t_M)
+        risk = np.sum(pred[:, :, pred_horizon:(eval_horizon + 1)], axis=2)  # risk score until eval_time
+        # conditioning on t > t_pred
+        risk = risk / (np.sum(np.sum(pred[:, :, pred_horizon:], axis=2), axis=1, keepdims=True) + _EPSILON)
+
+        for k in range(num_Event):
+            risk_all[:, k, t] = risk[:, k]
+
+    return risk_all
+
+
+

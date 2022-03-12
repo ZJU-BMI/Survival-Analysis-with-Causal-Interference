@@ -3,7 +3,7 @@ import numpy as np
 
 
 # USER-DEFINED FUNCTIONS
-def f_get_Normalization(X, norm_mode=None):
+def f_get_Normalization(X, norm_mode='normal'):
     num_Patient, num_Feature = np.shape(X)
 
     if norm_mode is None:
@@ -88,26 +88,31 @@ def f_construct_dataset(df, feat_list):
             - 2: event type 2
             ...
     """
-
     grouped = df.groupby(['id'])
     id_list = pd.unique(df['id'])
     max_meas = np.max(grouped.count())[0]
 
     data = np.zeros([len(id_list), max_meas, len(feat_list) + 1])
-    pat_info = np.zeros([len(id_list), 10])
+    pat_info = np.zeros([len(id_list), 16])
 
     for i, tmp_id in enumerate(id_list):
         tmp = grouped.get_group(tmp_id).reset_index(drop=True)
 
-        pat_info[i, 9] = tmp['pneu'][0]         # pneumonia
-        pat_info[i, 8] = tmp['my_inf'][0]       # myocardial infarction
-        pat_info[i, 7] = tmp['aresp_fail'][0]   # acute respiratory failure
-        pat_info[i, 6] = tmp['cere_hemo'][0]    # cerebral hemorrhage
-        pat_info[i, 5] = tmp['sept'][0]         # septicemia
-        pat_info[i, 4] = tmp.shape[0]           # number of measurement
-        pat_info[i, 3] = np.max(tmp['time'])    # last measurement time
-        pat_info[i, 2] = tmp['death_reason'][0]          # cause
-        pat_info[i, 1] = tmp['ett'][4] + tmp['time'][4]  # time_to_event or time to censored
+        pat_info[i, 15] = tmp['akf'][0]  # acute kidney failure
+        pat_info[i, 14] = tmp['col'][0]  # cirrhosis of liver
+        pat_info[i, 13] = tmp['sh'][0]  # subarachnoid hemorrhage
+        pat_info[i, 12] = tmp['ci'][0]  # cerebral infarction
+        pat_info[i, 11] = tmp['pneu'][0]  # pneumonia
+        pat_info[i, 10] = tmp['hf'][0]  # heart failure
+        pat_info[i, 9] = tmp['mi'][0]  # myocardial infarction
+        pat_info[i, 8] = tmp['arf'][0]  # acute resp. failure
+        pat_info[i, 7] = tmp['ch'][0]  # cerebral hemorrhage
+        pat_info[i, 6] = tmp['neop'][0]  # neoplasm
+        pat_info[i, 5] = tmp['sep'][0]  # septicemia
+        pat_info[i, 4] = tmp.shape[0]  # number of measurement
+        pat_info[i, 3] = np.max(tmp['time'])  # last measurement time
+        pat_info[i, 2] = tmp['label'][0]  # cause
+        pat_info[i, 1] = tmp['tte'][0]  # time_to_event or time to censored
         pat_info[i, 0] = tmp['id'][0]
 
         data[i, :int(pat_info[i, 4]), 1:] = tmp[feat_list]
@@ -117,18 +122,28 @@ def f_construct_dataset(df, feat_list):
 
 
 def import_dataset_mimic(norm_mode=None):
-    df_ = pd.read_csv('./data/mimic_data_cleaned.csv')
+    df_ = pd.read_csv('data/mimic_data_final.csv')
+    df_ = pd.get_dummies(df_)
+    # print(df_.columns)
+    bin_list = ['gender','ca', 'leu', 'hepf', 'panc','vt', 'diab',
+                'nacl_09', 'dextrose', 'propofol', 'norepinephrine',
+                'gastric_med', 'insulin', 'gt_flush', 'fentanyl', 'kcl',
+                'heparin_sodium', 'vancomycin', 'furosemide',
+                'ethnicity_AMERICAN INDIAN/ALASKA NATIVE', 'ethnicity_ASIAN',
+                'ethnicity_BLACK/AFRICAN AMERICAN', 'ethnicity_HISPANIC/LATINO',
+                'ethnicity_OTHER', 'ethnicity_WHITE']
 
-    bin_list = ['gender']
-    cont_list = ['age', 'hosp_stay', 'height', 'hematocrit', 'hemoglobin', 'mch',
-                 'mchc', 'mcv', 'platelet', 'rbc', 'rdw', 'wbc', 'total_co2', 'pco2',
-                 'po2', 'base_excess', 'aniongap', 'bicarbonate', 'bun', 'calcium',
-                 'chloride', 'creatinine', 'glucose', 'sodium', 'potassium', 'magnesium',
-                 'phosphate', 'ph', 'inr', 'pt', 'ptt', 'heart_rate', 'sbp', 'dbp',
-                 'mbp', 'resp_rate', 'temperature', 'spo2', 'weight']
+    cont_list = ['age', 'height', 'weight', 'bmi', 'heart_rate',
+                 'sbp', 'dbp', 'mbp', 'fio2', 'resp_rate', 'temperature', 'spo2', 'hct',
+                 'hgb', 'mch', 'mchc', 'mcv', 'platelet', 'rbc', 'rdw', 'wbc', 'pco2',
+                 'po2', 'tco2', 'base_excess', 'aniongap', 'bicarbonate', 'bun',
+                 'calcium', 'chloride', 'glucose', 'sodium', 'potassium', 'magnesium',
+                 'phosphate', 'lactate', 'ph', 'inr', 'pt', 'ptt', 'alt', 'alp', 'ast',
+                 'bil_total']
 
     feat_list = cont_list + bin_list
-    df_ = df_[['id', 'ett', 'time', 'death_reason', 'sept', 'cere_hemo', 'aresp_fail', 'my_inf', 'pneu'] + feat_list]
+    df_ = df_[['id', 'tte', 'time', 'label', 'sep', 'neop', 'ch', 'arf', 'mi', 'hf',
+               'pneu', 'ci', 'sh', 'col', 'akf'] + feat_list]
     df_org_ = df_.copy(deep=True)
 
     df_[cont_list] = f_get_Normalization(np.asarray(df_[cont_list]).astype(float), norm_mode)
@@ -147,30 +162,30 @@ def import_dataset_mimic(norm_mode=None):
 
     last_meas = pat_info[:, [3]]  # pat_info[:, 3] contains age at the last measurement
     label = pat_info[:, [2]]  # two competing risks
-    time = pat_info[:, [1]]  # age when event occurred
-    diags = pat_info[:, 5:10]
+    time = pat_info[:, [1]]  # time when event occurred
+    diags = pat_info[:, 5:16]  # diag info
 
-    num_Category = int(np.max(pat_info[:, 1]) * 1.1)  # or specifically define larger than the max tte
+    num_Category = int(np.max(pat_info[:, 1]) * 1.2)  # or specifically define larger than the max tte
     num_Event = len(np.unique(label)) - 1
-
+    event_prob = np.sum(diags, axis=0) / len(diags)
+    # make single risk
     if num_Event == 1:
-        label[np.where(label != 0)] = 1  # make single risk
+        label[np.where(label != 0)] = 1
 
     mask1 = f_get_fc_mask1(last_meas, num_Event, num_Category)
     mask2 = f_get_fc_mask2(time, label, num_Event, num_Category)
     mask3 = f_get_fc_mask3(time, -1, num_Category)
 
-    DIM = (x_dim, x_dim_cont, x_dim_bin)
+    DIM = (x_dim, x_dim_cont, x_dim_bin, event_prob)
     DATA = (data, time, label, diags)
-    # DATA = (data, data_org, time, label)
     MASK = (mask1, mask2, mask3)
 
     return DIM, DATA, MASK, data_mi
 
 
 if __name__ == '__main__':
-    (x_dim, x_dim_cont, x_dim_bin), (data, time, label, diags), \
-        (mask1, mask2, mask3), data_mi = import_dataset_mimic(None)
+    (x_dim, x_dim_cont, x_dim_bin, event_prob), (data, time, label, diags), \
+    (mask1, mask2, mask3), data_mi = import_dataset_mimic('normal')
 
     # print(data[[0]].shape)
-    print(mask1.shape)
+    print(event_prob)

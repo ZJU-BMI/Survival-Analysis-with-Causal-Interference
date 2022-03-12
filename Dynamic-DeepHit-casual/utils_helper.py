@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 
-##### USER-DEFINED FUNCTIONS
+# USER-DEFINED FUNCTIONS
 def f_get_fc_mask1(meas_time, num_Event, num_Category):
     '''
         mask1 is required to get the contional probability (to calculate the denominator part)

@@ -41,6 +41,7 @@ class Model_Longitudinal_Attention:
 
         self.num_Category = input_dims['num_Category']
         self.max_length = input_dims['max_length']
+        self.event_prob = input_dims['event_prob']  # P(D = d)
 
         # NETWORK HYPER-PARAMETERS
         self.h_dim1 = network_settings['h_dim_RNN']
@@ -48,14 +49,10 @@ class Model_Longitudinal_Attention:
         self.num_layers_RNN = network_settings['num_layers_RNN']
         self.num_layers_ATT = network_settings['num_layers_ATT']
         self.num_layers_CS = network_settings['num_layers_CS']
-
         self.RNN_type = network_settings['RNN_type']
-
         self.FC_active_fn = network_settings['FC_active_fn']
         self.RNN_active_fn = network_settings['RNN_active_fn']
         self.initial_W = network_settings['initial_W']
-
-        self.event_prob = network_settings['event_prob']  # P(D = d)
 
         self.reg_W = tf.contrib.layers.l1_regularizer(scale=network_settings['reg_W'])
         self.reg_W_out = tf.contrib.layers.l1_regularizer(scale=network_settings['reg_W_out'])
@@ -96,9 +93,7 @@ class Model_Longitudinal_Attention:
 
             # DEFINE LOOP FUNCTION FOR RAW_RNN w/ TEMPORAL ATTENTION
             def loop_fn_att(time, cell_output, cell_state, loop_state):
-
                 emit_output = cell_output
-
                 if cell_output is None:  # time == 0
                     next_cell_state = cell.zero_state(self.mb_size, tf.float32)
                     next_loop_state = loop_state_ta

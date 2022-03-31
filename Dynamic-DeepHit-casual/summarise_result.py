@@ -18,7 +18,7 @@ _EPSILON = 1e-8
 if data_mode == 'MIMIC':
     (x_dim, x_dim_cont, x_dim_bin, event_prob), (data, time, label, diags), (mask1, mask2, mask3), (
         data_mi) = import_dataset_mimic(norm_mode='normal')
-    eval_time = [5, 25, 50, 70]
+    eval_time = [5, 25, 50, 75]
 elif data_mode == 'EICU':
     (x_dim, x_dim_cont, x_dim_bin, event_prob), (data, time, label, diags), (mask1, mask2, mask3), (
         data_mi) = import_dataset_eicu(norm_mode='normal')
@@ -42,7 +42,7 @@ pred_risk_path = data_mode + '/pred_risk'
 if not os.path.exists(pred_risk_path):
     os.makedirs(pred_risk_path)
 
-for out_itr in range(3, 5):
+for out_itr in range(10):
     ITERATION = 5
     in_path = data_mode + '/result{}'.format(out_itr + 1)
 
@@ -129,9 +129,6 @@ for out_itr in range(3, 5):
         label_all[cur:cur + N_fold] = np.reshape(te_label, [N_fold])
         cur += N_fold
 
-        # risk_all = f_get_risk_predictions2(sess, model, te_data, te_data_mi, te_diags,
-        #                                    pred_time=0, eval_time=eval_time)
-
         te_result = np.zeros([len(eval_time), num_Event])
         for t, t_time in enumerate(eval_time):
             eval_horizon = int(t_time)
@@ -178,34 +175,3 @@ for out_itr in range(3, 5):
     print(df_mean)
     print('Mean Total:')
     print(np.mean(FINAL1))
-
-    # risk_sum = np.cumsum(pred_all, axis=2)
-    np.save(pred_risk_path + '/pred_risk_causal_{}.npy'.format(out_itr + 2), pred_all)
-    true_labels = pd.DataFrame({
-        'true_label': label_all,
-        'true_time': time_all
-    })
-    true_labels.to_csv(pred_risk_path + '/true_label_{}.csv'.format(out_itr + 1), index=False)
-    # survival curve
-    # pred_risk = pd.DataFrame({
-    #     'true_time': time_all,
-    #     'true_label': label_all
-    # })
-    # pred_times = np.zeros(shape=[N])
-    # pred_labels = np.zeros(shape=[N])
-    # for i in range(N):
-    #     # if label_all[i] == 0:
-    #     #     pred_times[i] = time_all[i]
-    #     #     pred_labels[i] = 0
-    #     #     continue
-    #     for t in range(num_Category):
-    #         pred_surv = 1 - np.sum(risk_sum[i, :, t])
-    #         max_pred_ev = np.argmax(risk_sum[i, :, t])
-    #         if risk_sum[i, max_pred_ev, t] > pred_surv:
-    #             pred_times[i] = t
-    #             pred_labels[i] = max_pred_ev + 1
-    #             break
-    #
-    # pred_risk['pred_time'] = pred_times
-    # pred_risk['pred_label'] = pred_labels
-    # pred_risk.to_csv(pred_risk_path + '/pred_label_causal{}.csv'.format(out_itr + 1), index=False)

@@ -154,31 +154,4 @@ for out_itr in range(3):
     print(df)
     print('mean: ')
     print(np.mean(FINAL1))
-    # df1_std.to_csv(in_path + '/result_CINDEX_FINAL_STD.csv')
-    np.save(pred_risk_path + '/pred_risk_causal_{}.npy'.format(out_itr + 1), pred_all)
 
-    # survival curve
-    # pred_risk = pd.DataFrame({
-    #     'true_time': time_all,
-    #     'true_label': label_all
-    # })
-    # # for i in range(N):
-    # #     pred_all[i, :, :] = pred_all[i, :, :] / (np.sum(pred_all[i, :, -1]) + _EPSILON)
-    # pred_times = np.zeros(shape=[N])
-    # pred_labels = np.zeros(shape=[N])
-    # for i in range(N):
-    #     if label_all[i] == 0:
-    #         pred_times[i] = time_all[i]
-    #         pred_labels[i] = 0
-    #         continue
-    #     for t in range(n_times):
-    #         pred_surv = 1 - np.sum(pred_all[i, :, t])
-    #         max_pred_ev = np.argmax(pred_all[i, :, t])
-    #         if pred_all[i, max_pred_ev, t] > pred_surv:
-    #             pred_times[i] = t
-    #             pred_labels[i] = max_pred_ev + 1
-    #             break
-    #
-    # pred_risk['pred_time'] = pred_times
-    # pred_risk['pred_label'] = pred_labels
-    # pred_risk.to_csv(pred_risk_path + '/pred_label_causal{}.csv'.format(out_itr + 1), index=False)

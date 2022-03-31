@@ -15,7 +15,7 @@ if data_mode == 'MIMIC':
     eval_times = [5, 25, 50, 75]
 elif data_mode == 'EICU':
     (x_dim, num_event, event_prob), (data, time, label, diags) = utils.import_dataset_eicu(norm_mode='normal')
-    eval_times = [5, 25, 50, 75]
+    eval_times = [20, 40, 60, 80]
 elif data_mode == 'SEER':
     (x_dim, num_event, event_prob), (data, time, label, diags) = utils.import_dataset_seer(norm_mode='normal')
     eval_times = [12, 36, 60, 84]

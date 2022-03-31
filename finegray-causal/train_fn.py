@@ -7,8 +7,6 @@ import tensorflow as tf
 
 import utils
 from finegray_causal import FG_Model
-from termcolor import colored
-from lifelines.utils import concordance_index
 
 
 def f_get_minibatch(mb_size, x, label, time, diags, num_event=3):
@@ -18,7 +16,6 @@ def f_get_minibatch(mb_size, x, label, time, diags, num_event=3):
     k_mb = label[idx, :].astype(np.float32)  # censoring(0)/event(1,2,..) label
     t_mb = time[idx, :].astype(np.float32)  # time to event
     d_mb = diags[idx, :].astype(np.float32)     # diagnosis
-    # m1_mb = mask[idx][:, idx, :].astype(np.float32)
     m1_mb = utils.get_bh_mask(t_mb, k_mb, num_event)
     return x_mb, k_mb, t_mb, d_mb, m1_mb
 
@@ -84,7 +81,6 @@ def train(DATA, in_parser, cur_itr=0, MAX_VALUE=-99, seed=1234, eval_times=None,
 
         x_mb, k_mb, t_mb, d_mb, m_mb = f_get_minibatch(mb_size, tr_data, tr_label,
                                                        tr_time, tr_diags, num_event=num_event)
-        # d_mb2 = np.ones([len(d_mb), num_event])
         data_train = (x_mb, k_mb, t_mb, d_mb)
         mask_train = m_mb
         _, loss_cur = model.train(data_train, mask_train, lr_train=lr_train)
@@ -95,7 +91,6 @@ def train(DATA, in_parser, cur_itr=0, MAX_VALUE=-99, seed=1234, eval_times=None,
             avg_loss = 0
 
         if (itr + 1) % 1000 == 0:
-            # va_diags2 = np.ones([len(va_diags), num_event])
             pred = model.predict(va_data, va_diags)
             # calculate CIF over time
             n_va = len(va_data)

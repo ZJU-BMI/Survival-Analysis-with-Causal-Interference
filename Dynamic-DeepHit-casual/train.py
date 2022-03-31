@@ -32,16 +32,19 @@ seed = 1234
 if data_mode == 'MIMIC':
     (x_dim, x_dim_cont, x_dim_bin, event_prob), (data, time, label, diags), (mask1, mask2, mask3), (
         data_mi) = import_dataset_mimic(norm_mode='normal')
+    eval_time = [5, 25, 50, 75]  # evaluation time (for C-index)
 elif data_mode == 'EICU':
     (x_dim, x_dim_cont, x_dim_bin, event_prob), (data, time, label, diags), (mask1, mask2, mask3), (
         data_mi) = import_dataset_eicu(norm_mode='normal')
+    eval_time = [20, 40, 60, 80]  # evaluation time (for C-index)
 else:
     (x_dim, x_dim_cont, x_dim_bin, event_prob), (data, time, label, diags), (mask1, mask2, mask3), (
         data_mi) = import_dataset_mimic(norm_mode='normal')
+    eval_time = [5, 25, 50, 75]  # evaluation time (for C-index)
 
 # This must be changed depending on the datasets, prediction/evaliation times of interest
 pred_time = 5  # prediction time (in days)
-eval_time = [5, 25, 50, 75]  # evaluation time (for C-index)
+
 
 _, num_Event, num_Category = np.shape(mask1)  # dim of mask3: [subj, Num_Event, Num_Category]
 max_length = np.shape(data)[1]
@@ -120,7 +123,7 @@ alpha = new_parser['alpha']
 beta = new_parser['beta']
 gamma = new_parser['gamma']
 
-for out_itr in range(3, 5):
+for out_itr in range(10):
     # SAVE HYPER PARAMETERS
     out_path = file_path + '/result' + str(out_itr + 1)
     if not os.path.exists(out_path):

@@ -22,11 +22,6 @@ if not os.path.exists(pred_risk_path):
 (x_dim, num_event, event_prob), (data, time, label, diags), \
     eval_times = datasets.load_dataset(dataset=dataset)
 
-# data = data[0:1000]
-# time = time[0:1000]
-# label = label[0:1000]
-# diags = diags[0:1000]
-
 
 skf = StratifiedKFold(n_splits=n_split, shuffle=True, random_state=seed)
 cur = 0

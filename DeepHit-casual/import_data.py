@@ -1,13 +1,3 @@
-"""
-This provide the dimension/data/mask to train/test the network.
-
-Once must construct a function similar to "import_dataset_SYNTHETIC":
-    - DATA FORMAT:
-        > data: covariates with x_dim dimension.
-        > label: 0: censoring, 1 ~ K: K competing(single) risk(s)
-        > time: time-to-event or time-to-censoring
-    - Based on the data, creat mask1 and mask2 that are required to calculate loss functions.
-"""
 import numpy as np
 import pandas as pd
 import random
@@ -81,83 +71,94 @@ def f_get_fc_mask3(time, meas_time, num_Category):
     return mask
 
 
-def import_dataset_eicu(norm_mode=None):
-    in_filename = './datasets/eicu_data_cleaned.csv'
+def import_dataset_eicu(norm_mode='normal'):
+    in_filename = './datasets/eicu_data_final2.csv'
     df = pd.read_csv(in_filename, sep=',')
-
-    label = np.asarray(df[['death_reason']])
-    time = np.asarray(df[['icu_stay']])
-    diags = np.asarray(df.iloc[:, 4:7])
-    data = np.asarray(df.iloc[:, 7:])
-    data = f_get_Normalization(data, norm_mode)
-
-    num_Category = int(np.max(time) * 1.2)  # to have enough time-horizon
-    num_Event = int(len(np.unique(label)) - 1)  # only count the number of events (do not count censoring as an event)
-
-    x_dim = np.shape(data)[1]
-
-    mask1 = f_get_fc_mask2(time, label, num_Event, num_Category)
-    mask2 = f_get_fc_mask3(time, -1, num_Category)
-
-    DIM = x_dim
-    DATA = (data, time, label, diags)
-    MASK = (mask1, mask2)
-
-    return DIM, DATA, MASK
-
-
-def import_dataset_mimic(norm_mode=None):
-    in_filename = './datasets/mimic_data_cleaned.csv'
-    df = pd.read_csv(in_filename, sep=',')
-    df['survive_time'] = df['ett'] + df['time']
+    df = df.sort_values(by='tte', ascending=True)
+    df = pd.get_dummies(df)
     # print(df.columns)
-    label = np.asarray(df[['death_reason']])
-    time = np.asarray(df[['survive_time']])
-    diags = np.asarray(df.iloc[:, 1:6])
-    data = np.asarray(df.iloc[:, 6:46])
+    label = np.asarray(df[['label']])
+    time = np.asarray(df[['tte']])
+    diags = np.asarray(df.iloc[:, 5:16])
+    data = np.asarray(df.iloc[:, 16:])
     data = f_get_Normalization(data, norm_mode)
 
-    num_Category = int(np.max(time) * 1.1)  # to have enough time-horizon
-    num_Event = int(len(np.unique(label)) - 1)  # only count the number of events (do not count censoring as an event)
-    print(num_Category, num_Event)
     x_dim = np.shape(data)[1]
+    # only count the number of events (do not count censoring as an event)
+    num_event = int(len(np.unique(label)) - 1)
+    event_prob = np.sum(diags, axis=0) / len(diags)
 
-    mask1 = f_get_fc_mask2(time, label, num_Event, num_Category)
-    mask2 = f_get_fc_mask3(time, -1, num_Category)
+    num_category = int(np.max(time) * 1.2)  # to have enough time-horizon
+    print(num_category)
+    mask1 = f_get_fc_mask2(time, label, num_event, num_category)
+    mask2 = f_get_fc_mask3(time, -1, num_category)
 
-    DIM = x_dim
+    DIM = (x_dim, num_event, event_prob)
     DATA = (data, time, label, diags)
     MASK = (mask1, mask2)
 
     return DIM, DATA, MASK
 
 
-def import_dataset_SYNTHETIC(norm_mode='standard'):
-    in_filename = './sample data/SYNTHETIC/synthetic_comprisk.csv'
+def import_dataset_mimic(norm_mode='normal'):
+    in_filename = './datasets/mimic_data_final4.csv'
     df = pd.read_csv(in_filename, sep=',')
 
+    df = df.sort_values(by='tte', ascending=True)
+    df = pd.get_dummies(df)
+    # print(df.columns)
     label = np.asarray(df[['label']])
-    time = np.asarray(df[['time']])
-
-    data = np.asarray(df.iloc[:, 4:])
+    time = np.asarray(df[['tte']])
+    diags = np.asarray(df.iloc[:, 5:16])
+    data = np.asarray(df.iloc[:, 16:])
     data = f_get_Normalization(data, norm_mode)
-
-    num_Category = int(np.max(time) * 1.2)  # to have enough time-horizon
-    num_Event = int(len(np.unique(label)) - 1)  # only count the number of events (do not count censoring as an event)
-
-    diags = np.ones(shape=[len(data), num_Event], dtype=np.float32)
+    print(len(time))
     x_dim = np.shape(data)[1]
+    # only count the number of events (do not count censoring as an event)
+    num_event = int(len(np.unique(label)) - 1)
+    event_prob = np.sum(diags, axis=0) / len(diags)
 
-    mask1 = f_get_fc_mask2(time, label, num_Event, num_Category)
-    mask2 = f_get_fc_mask3(time, -1, num_Category)
+    num_category = int(np.max(time) * 1.2)  # to have enough time-horizon
+    print(num_category)
+    mask1 = f_get_fc_mask2(time, label, num_event, num_category)
+    mask2 = f_get_fc_mask3(time, -1, num_category)
 
-    DIM = x_dim
+    DIM = (x_dim, num_event, event_prob)
     DATA = (data, time, label, diags)
     MASK = (mask1, mask2)
 
     return DIM, DATA, MASK
 
 
-if __name__ == '__main__':
-    dim, (data, time, label, diags), (mask1, mask2) = import_dataset_SYNTHETIC()
-    print(diags.shape)
+def import_dataset_seer(norm_mode='normal', loadmask=False):
+    data_path = 'datasets/seer_data.csv'
+    df = pd.read_csv(data_path, sep=',')
+    # one-hot category features
+    df = pd.get_dummies(df, columns=['ethnicity', 'prim_site', 'laterality', 'hist_behavior',
+                                     'cs_mets_at_dx', 'summary_stage'])
+    # sort by tte
+    df = df.sort_values(by='tte', ascending=True)
+    # df.to_csv('datasets/eicu_data_final3.csv', index=False)
+    # print(df.columns)
+    label = np.asarray(df[['label']])
+    time = np.asarray(df[['tte']])
+
+    data = np.asarray(df.iloc[:, 3:])
+    data = f_get_Normalization(data, norm_mode)
+
+    # only count the number of events (do not count censoring as an event)
+    num_event = int(len(np.unique(label)) - 1)
+    diags = np.ones([len(label), num_event])
+    event_prob = np.sum(diags, axis=0) / len(diags)
+    # print(mask.shape)
+    x_dim = np.shape(data)[1]
+
+    num_category = int(np.max(time) * 1.2)  # to have enough time-horizon
+    print(num_category)
+    mask1 = f_get_fc_mask2(time, label, num_event, num_category)
+    mask2 = f_get_fc_mask3(time, -1, num_category)
+
+    DIM = (x_dim, num_event, event_prob)
+    DATA = (data, time, label, diags)
+    MASK = (mask1, mask2)
+    return DIM, DATA, MASK

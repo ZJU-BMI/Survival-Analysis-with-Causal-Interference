@@ -156,6 +156,5 @@ for out_itr in range(3):
     print(df)
     print('mean: ')
     print(np.mean(FINAL1))
-    # df1_std.to_csv(in_path + '/result_CINDEX_FINAL_STD.csv')
-    np.save(pred_risk_path + '/pred_risk_causal_{}.npy'.format(out_itr + 1), pred_all)
+
 

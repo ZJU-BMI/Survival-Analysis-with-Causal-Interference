@@ -304,7 +304,6 @@ def import_dataset_mimic(norm_mode='normal', loadmask=True):
     # one-hot ethenity
     df = pd.get_dummies(df)
     # sort by tte
-    # df['tte'] = df['tte'] - df['time']
     df = df.sort_values(by='tte', ascending=True)
     # print(df.columns)
     print(np.sum(np.asarray(df['time'])))
@@ -333,7 +332,6 @@ def import_dataset_eicu(norm_mode='standard', loadmask=True):
     # one-hot ethenity
     df = pd.get_dummies(df)
     # sort by tte
-    # df['tte'] = df['tte'] - df['time']
     df = df.sort_values(by='tte', ascending=True)
     # print(df.columns)
     label = np.asarray(df[['label']])
@@ -364,8 +362,6 @@ def import_dataset_seer(norm_mode='normal', loadmask=False):
                                      'cs_mets_at_dx', 'summary_stage'])
     # sort by tte
     df = df.sort_values(by='tte', ascending=True)
-    # df.to_csv('datasets/eicu_data_final3.csv', index=False)
-    # print(df.columns)
     label = np.asarray(df[['label']])
     time = np.asarray(df[['tte']])
 

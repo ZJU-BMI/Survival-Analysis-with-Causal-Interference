@@ -8,7 +8,7 @@ import utils
 
 _EPSILON = 1e-8
 
-data_mode = 'SEER'  # EICU, MIMIC
+data_mode = 'MIMIC'  # EICU, MIMIC
 seed = 1234
 
 # IMPORT DATASET

@@ -1,0 +1,101 @@
+DROP MATERIALIZED VIEW IF EXISTS features;
+CREATE MATERIALIZED VIEW features AS (
+		SELECT 
+			icd.subject_id,
+			icd.hadm_id,
+			icd.admittime,
+			icd.dischtime,
+			(CASE WHEN icd.gender = 'F' THEN 0 WHEN icd.gender = 'M' THEN 1 ELSE NULL END) AS gender,
+			icd.admission_age AS age,
+			icd.los_icu,
+			icd.hospital_expire_flag AS "flag",
+			
+			
+			fp1.height, 
+			fp1.weight,
+			fp1.heart_rate,
+			fp1.sbp,
+			fp1.dbp,
+			fp1.mbp,
+			fp1.sbp_ni,
+			fp1.dbp_ni,
+			fp1.mbp_ni,
+			fp1.cvp,
+			fp1.resp_rate,
+			fp1.temperature,
+			fp1.spo2,
+			fp1.hematocrit,
+			fp1.hemoglobin,
+			fp1.mch,
+			fp1.mchc,
+			fp1.mcv,
+			fp1.platelet,
+			fp1.rbc,
+			fp1.rdw,
+			fp1.rdwsd,
+			
+			fp2.wbc,
+			fp2.basophils_abs,
+			fp2.eosinophils_abs,
+			fp2.lymphocytes_abs,
+			fp2.monocytes_abs,
+			fp2.neutrophils_abs,
+			fp2.basophils,
+			fp2.eosinophils,
+			fp2.lymphocytes,
+			fp2.monocytes,
+			fp2.neutrophils,
+			fp2.d_dimer,
+			fp2.fibrinogen,
+			fp2.thrombin,
+			fp2.inr,
+			fp2.pt,
+			fp2.ptt,
+			fp2.tc,
+			fp2.tg,
+			fp2.hdlc,
+			fp2.ldlc,
+			
+			fp3.sg,
+			fp3.ph,
+			fp3.ket,
+			fp3.leu,
+			fp3.nit,
+			fp3.pro,
+			fp3.glu,
+			fp3.bil,
+			fp3.ubg,
+			fp3.albumin,
+			fp3.globulin,
+			fp3.total_protein,
+			fp3.aniongap,
+			fp3.bicarbonate,
+			fp3.bun,
+			fp3.calcium,
+			fp3.chloride,
+			fp3.creatinine,
+			fp3.glucose,
+			fp3.sodium,
+			fp3.potassium,
+			fp3.alt,
+			fp3.alp,
+			fp3.ast,
+			fp3.amylase,
+			fp3.bilirubin_total,
+			fp3.bilirubin_direct,
+			fp3.bilirubin_indirect,
+			fp3.ck_cpk,
+			fp3.ck_mb,
+			fp3.ggt,
+			fp3.ld_ldh		
+			
+		 FROM icustays_detail icd
+		 -- FROM (SELECT ROW_NUMBER () OVER (PARTITION BY subject_id ORDER BY admittime ASC) AS rid, * FROM mimic_icu.icustays_detail) AS icd
+		 LEFT JOIN mimic_icu.features_part1 fp1 
+				ON icd.subject_id = fp1.subject_id AND icd.admittime = fp1.admittime AND icd.dischtime = fp1.dischtime
+		 LEFT JOIN mimic_icu.features_part2 fp2
+				ON icd.subject_id = fp2.subject_id AND icd.admittime = fp2.admittime AND icd.dischtime = fp2.dischtime
+		 LEFT JOIN mimic_icu.features_part3 fp3
+				ON icd.subject_id = fp3.subject_id AND icd.admittime = fp3.admittime AND icd.dischtime = fp3.dischtime
+		 -- WHERE icd.rid = 1
+ );
